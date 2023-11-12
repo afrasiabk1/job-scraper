@@ -15,4 +15,16 @@ public enum LinkedinDateEnum {
     public int getVal() {
         return val;
     }
+    public static LinkedinDateEnum getLinkedinEnum(String name){
+        if (pastDay.name().equals(name)){
+            return pastDay;
+        }
+        else if (pastMonth.name().equals(name)){
+            return pastMonth;
+        }
+        else if (pastWeek.name().equals(name)){
+            return pastWeek;
+        }
+        return null;
+    }
 }

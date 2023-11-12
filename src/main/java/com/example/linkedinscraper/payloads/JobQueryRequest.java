@@ -2,6 +2,9 @@ package com.example.linkedinscraper.payloads;
 
 import com.example.linkedinscraper.enums.LinkedinDateEnum;
 import com.fasterxml.jackson.annotation.JsonEnumDefaultValue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIncludeProperties;
+import com.opencsv.bean.CsvBindByPosition;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,13 +20,21 @@ import java.util.ArrayList;
 @NoArgsConstructor
 public class JobQueryRequest {
 
+    @CsvBindByPosition(position = 0)
     private String tamCompanyId;
+    @CsvBindByPosition(position = 1)
     private String companyLinkedinUid;
-    private ArrayList<String> keywordsInTitle = new ArrayList<>();
-    private ArrayList<String> keywordsInBody = new ArrayList<>();
-    private ArrayList<String> keywordsNotInTitleAndBody = new ArrayList<>();
-    private LocalDate postedAfterDate;
-    private LocalDate postedBeforeDate;
-    private LinkedinDateEnum postedIn;
+    @CsvBindByPosition(position = 2)
+    private String keywordsInTitle;
+    @CsvBindByPosition(position = 3)
+    private String keywordsInBody;
+    @CsvBindByPosition(position = 4)
+    private String keywordsNotInTitleAndBody;
+    @CsvBindByPosition(position = 5)
+    private String postedIn;
+    @CsvBindByPosition(position = 6)
+    private String postedAfterDate;
+    @CsvBindByPosition(position = 7)
+    private String postedBeforeDate;
 
 }

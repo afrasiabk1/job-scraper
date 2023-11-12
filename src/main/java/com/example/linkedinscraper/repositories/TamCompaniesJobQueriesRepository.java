@@ -10,6 +10,6 @@ import java.util.List;
 @Repository
 public interface TamCompaniesJobQueriesRepository extends JpaRepository<TamCompaniesJobQueries, Long> {
 
-    @Query(value = "select job from TamCompaniesJobQueries job where job.status=:status")
-    List<TamCompaniesJobQueries> findAllByStatus(String status);
+    @Query(value = "select * from tam_companies_job_queries job where job.status=:status limit :runs", nativeQuery = true)
+    List<TamCompaniesJobQueries> findAllByStatus(String status, int runs);
 }

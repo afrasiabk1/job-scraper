@@ -23,15 +23,16 @@ public class TamCompaniesJobQueries {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private String tamCompanyId;
+    private String status;
+    private String runId;
+    private String dataSetId;
     private String companyLinkedinUid;
-    private String keysTitle;
-    private String keysBody;
-    private String keysNot;
     private LocalDate postedAfterDate;
     private LocalDate postedBeforeDate;
     private String postedIn;
-    private String status;
-    private String runId;
+    private String keysTitle;
+    private String keysBody;
+    private String keysNot;
 
     @CreationTimestamp
     @Temporal(TemporalType.TIMESTAMP)
