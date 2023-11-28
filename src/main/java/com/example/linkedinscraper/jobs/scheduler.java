@@ -14,29 +14,44 @@ import static com.example.linkedinscraper.config.ApifyConfig.NUM_RUNS;
 @Service
 public class scheduler {
 
-    private final TamCompaniesJobQueriesRepository repository;
+//    private final TamCompaniesJobQueriesRepository repository;
     private final ScraperService scraperService;
     public scheduler(TamCompaniesJobQueriesRepository repository, ScraperService scraperService) {
-        this.repository = repository;
+        //this.repository = repository;
         this.scraperService = scraperService;
     }
+//
+//    @Scheduled(initialDelay = 2*1000, fixedDelay = 70*1000)
+//    public void runImported() {
+//        System.out.println("run time :: " + LocalDateTime.now());
+//
+//        List<TamCompaniesJobQueries> toFetch = repository.findAllByStatus("RUN_INIT", 100);
+//        for (TamCompaniesJobQueries job : toFetch){
+//            scraperService.saveJobReponses(job);
+//        }
+//
+//        List<TamCompaniesJobQueries> toRun = repository.findAllByStatus("IMPORTED", NUM_RUNS);
+//            for (TamCompaniesJobQueries job : toRun) {
+//                scraperService.runCompanyAsync(job);
+//            }
+//
+//    }
 
-    @Scheduled(initialDelay = 2*1000, fixedDelay = 2*60*1000)
-    public void runImported() {
+    @Scheduled(initialDelay = 2*1000, fixedDelay = 5*60*1000)
+    public void run() {
         System.out.println("run time :: " + LocalDateTime.now());
-        List<TamCompaniesJobQueries> jobs = repository.findAllByStatus("IMPORTED", NUM_RUNS);
-            for (TamCompaniesJobQueries job : jobs) {
-                scraperService.runCompanyAsync(job);
-            }
-    }
+        scraperService.storeMetrics();
+//        scraperService.storeMetricsAMonthOnce();
+//
+//        List<TamCompaniesJobQueries> toFetch = repository.findAllByStatus("RUN_INIT", 100);
+//        for (TamCompaniesJobQueries job : toFetch){
+//            scraperService.saveJobReponses(job);
+//        }
+//
+//        List<TamCompaniesJobQueries> toRun = repository.findAllByStatus("IMPORTED", NUM_RUNS);
+//        for (TamCompaniesJobQueries job : toRun) {
+//            scraperService.runCompanyAsync(job);
+//        }
 
-
-    @Scheduled(fixedDelay = 5*60*1000)
-    public void runInit() {
-        System.out.println("run time 2 :: " + LocalDateTime.now());
-        List<TamCompaniesJobQueries> jobs = repository.findAllByStatus("RUN_INIT", 100);
-        for (TamCompaniesJobQueries job : jobs){
-            scraperService.saveJobReponses(job);
-        }
     }
 }

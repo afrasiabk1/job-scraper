@@ -30,8 +30,14 @@ public class TamCompaniesJobQueries {
     private LocalDate postedAfterDate;
     private LocalDate postedBeforeDate;
     private String postedIn;
+
+    @Column(columnDefinition="TEXT")
     private String keysTitle;
+
+    @Column(columnDefinition="TEXT")
     private String keysBody;
+
+    @Column(columnDefinition="TEXT")
     private String keysNot;
 
     @CreationTimestamp

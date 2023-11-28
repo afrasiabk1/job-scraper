@@ -1,24 +1,16 @@
 package com.example.linkedinscraper.services;
 
+import com.example.linkedinscraper.entities.Customers;
 import com.example.linkedinscraper.entities.TamCompaniesJobQueries;
-import com.example.linkedinscraper.enums.LinkedinDateEnum;
-import com.example.linkedinscraper.payloads.ActorRunRequest;
-import com.example.linkedinscraper.payloads.JobDataSetResponse;
-import com.example.linkedinscraper.payloads.JobQueryRequest;
-import com.example.linkedinscraper.repositories.TamCompaniesJobQueriesRepository;
-import com.example.linkedinscraper.repositories.TamCompaniesJobsRepository;
+import com.example.linkedinscraper.payloads.*;
+import com.example.linkedinscraper.repositories.*;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.opencsv.CSVReader;
-import com.opencsv.CSVReaderBuilder;
 import com.opencsv.bean.CsvToBeanBuilder;
-import org.apache.tomcat.util.buf.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cglib.core.Local;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -26,11 +18,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.FileReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,11 +39,18 @@ public class ScraperService {
 
     private final TamCompaniesJobQueriesRepository queriesRepository;
     private final TamCompaniesJobsRepository jobsRepository;
+    private final CompanySignalsRepository companySignalsRepository;
+    private final CustomersRepository customersRepository;
+    private final MetricsRepository metricsRepository;
 
-    public ScraperService(RestTemplate restTemplate, TamCompaniesJobQueriesRepository queriesRepository, TamCompaniesJobsRepository jobsRepository) {
+
+    public ScraperService(RestTemplate restTemplate, TamCompaniesJobQueriesRepository queriesRepository, TamCompaniesJobsRepository jobsRepository, CompanySignalsRepository companySignalsRepository, CustomersRepository customersRepository, MetricsRepository metricsRepository) {
         this.restTemplate = restTemplate;
         this.queriesRepository = queriesRepository;
         this.jobsRepository = jobsRepository;
+        this.companySignalsRepository = companySignalsRepository;
+        this.customersRepository = customersRepository;
+        this.metricsRepository = metricsRepository;
     }
 
     public void filterKeywords(List<JobDataSetResponse> jobDataSetResponses, TamCompaniesJobQueries jobQueryRequest) {
@@ -58,16 +59,16 @@ public class ScraperService {
             boolean match = false;
             String keyMatched = strContains(job.getTitle(), jobQueryRequest.getKeysTitle());
             String keyMisMatched = strContains(job.getTitle(), jobQueryRequest.getKeysTitle());
+            if (!keyMatched.isEmpty()) {
+                System.out.println("T Keyword: " + keyMatched);
+                match = true;
+            } else {
+                keyMatched = strContains(job.getDescriptionText(), jobQueryRequest.getKeysBody());
                 if (!keyMatched.isEmpty()) {
-                    System.out.println("T Keyword: " + keyMatched);
+                    System.out.println("B Keyword: " + keyMatched);
                     match = true;
-                } else {
-                    keyMatched = strContains(job.getDescriptionText(), jobQueryRequest.getKeysBody());
-                    if (!keyMatched.isEmpty()) {
-                        System.out.println("B Keyword: " + keyMatched);
-                        match = true;
-                    }
                 }
+            }
             if (match) {
 
                 keyMisMatched = strContains(job.getTitle(), jobQueryRequest.getKeysNot());
@@ -84,24 +85,27 @@ public class ScraperService {
                     match = false;
                 }
             }
-            if (match){
+            if (match) {
                 job.setKeyMatched(keyMatched);
                 job.setQuery(jobQueryRequest);
                 job.setDescriptionText(job.getDescriptionText().substring(0, Math.min(job.getDescriptionText().length(), 5000)));
                 jobsRepository.save(job);
             }
 
-            if (job.getPostedAt()!=null && !job.getPostedAt().isEmpty()) {
+            if (job.getPostedAt() != null && !job.getPostedAt().isEmpty()) {
                 LocalDate date = LocalDate.parse(job.getPostedAt());
+                System.out.println("Posted at: " + date);
                 if (jobQueryRequest.getPostedAfterDate() != null) {
                     if (date.isBefore(jobQueryRequest.getPostedAfterDate())) {
                         match = false;
+                        System.out.println("Should be Posted after : " + jobQueryRequest.getPostedAfterDate());
                     }
                 }
                 if (jobQueryRequest.getPostedBeforeDate() != null) {
-                        if (date.isAfter(jobQueryRequest.getPostedBeforeDate())) {
-                            match = false;
-                        }
+                    if (date.isAfter(jobQueryRequest.getPostedBeforeDate())) {
+                        match = false;
+                        System.out.println("Should be Posted before : " + jobQueryRequest.getPostedBeforeDate());
+                    }
                 }
             }
 
@@ -114,7 +118,7 @@ public class ScraperService {
 
     public static String strContains(String inputStr, String items) {
         if (items != null && !items.isEmpty()) {
-            for (String item : items.split(",")) {
+            for (String item : items.split(", ")) {
                 if (inputStr.toLowerCase().matches(".*\\b" + item.toLowerCase() + "\\b.*")) {
                     return item;
                 }
@@ -181,7 +185,7 @@ public class ScraperService {
         if (!payload.getKeywordsNotInTitleAndBody().isEmpty()) {
             queryObj.setKeysNot(payload.getKeywordsNotInTitleAndBody());
         }
-        if (payload.getPostedIn() != null) {
+        if (payload.getPostedIn() != null && getLinkedinEnum(payload.getPostedIn()) != null) {
             queryObj.setPostedIn(getLinkedinEnum(payload.getPostedIn()).name());
         }
         if (!payload.getPostedBeforeDate().isEmpty()) {
@@ -245,10 +249,14 @@ public class ScraperService {
         }
         search.append("&geoId=103644278");//united states
         search.append("&keywords=");
-        for (String key : jobQuery.getKeysTitle().split(",")){
-            search.append(key).append("%20OR%20");
+        for (String key : jobQuery.getKeysTitle().split(", ")) {
+            search.append(key).append(" OR ");
         }
-        System.out.println("query: " + search.toString());
+        int length = search.toString().length();
+        if (length >= 4) {
+            search = new StringBuilder(search.substring(0, length - 4));
+        }
+        System.out.println("query: S" + search.toString() + "E");
         return search.toString();
     }
 
@@ -260,17 +268,228 @@ public class ScraperService {
 
     public String importCompanies(MultipartFile file) {
         try {
-        Reader reader = new InputStreamReader(file.getInputStream());
+            Reader reader = new InputStreamReader(file.getInputStream());
             List<JobQueryRequest> queries = new CsvToBeanBuilder(reader)
                     .withSkipLines(1)
                     .withType(JobQueryRequest.class)
                     .build()
                     .parse();
             queries.forEach(this::saveQuery);
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             return e.getMessage();
         }
         return "Imported";
+    }
+
+    public void storeMetrics() {
+
+        //Fetching all campaigns once
+        System.out.println("Fetching All Campaigns");
+        List<Campaign> campaigns = new ArrayList<>();
+        try {
+            ResponseEntity<JsonNode> responseEntity = restTemplate.exchange(
+                    smartleadGetAllCampaigns,
+                    HttpMethod.GET,
+                    new HttpEntity<>(JsonNodeFactory.instance.nullNode()),
+                    JsonNode.class
+            );
+            if (responseEntity.getBody() != null) {
+                if (responseEntity.getBody() != null && responseEntity.getBody().isArray()) {
+                    for (JsonNode campaign : responseEntity.getBody()) {
+                        if (campaign.get("name") != null) {
+                            String campName = campaign.get("name").asText();
+                            if (campName.split("-").length > 0) {
+                                String customerName = campName.split("-")[0];
+                                if (customersRepository.findCustomersByNameAndTracked(customerName, true) != null) {
+                                    if (campaign.get("id") != null && !campaign.get("id").asText().isEmpty()) {
+                                        campaigns.add(Campaign.builder().campaignId(campaign.get("id").asText())
+                                                .customer(customerName).build());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+        List<Customers> customersList = customersRepository.findAllByTracked(true);
+        customersList.forEach(c -> {
+
+            System.out.println("Customer: "+c.getName());
+
+            Instant instant = Instant.now();
+            LocalDate dateStart = instant.atZone(ZoneId.of("America/New_York")).toLocalDate().atStartOfDay().toLocalDate();
+            LocalDate dateEnd = dateStart.plusDays(1);
+
+            Metrics m = new Metrics();
+
+            m.setCustomer(c.getName());
+            m.setCustomerId(c.getId());
+                m.setDate(dateStart);
+                m.setNewAccountsWithSignals(companySignalsRepository.findNewAccountsWithSignals(c.getId(), dateStart, dateEnd));
+                m.setNewTamAccountsIngested(companySignalsRepository.findNewTamAccountsIngested(c.getId(), dateStart, dateEnd));
+                m.setNewTamAccountsSegmented(companySignalsRepository.findNewTamAccountsSegmented(c.getId(), dateStart, dateEnd));
+                m.setAccountsContacted(companySignalsRepository.findAccountsContacted(c.getId(), dateStart, dateEnd));
+                m.setProspectsFound(companySignalsRepository.findProspectsFound(c.getId(), dateStart, dateEnd));
+                m.setProspectsContacted(companySignalsRepository.findProspectsContacted(c.getId(), dateStart, dateEnd));
+                m.setVerifiedEmailsFound(companySignalsRepository.findVerifiedEmailsFound(c.getId(), dateStart, dateEnd));
+                if (!m.getProspectsContacted().equals(BigDecimal.ZERO) && m.getProspectsContacted().compareTo(m.getVerifiedEmailsFound()) > 0) {
+                    m.setVerifiedEmailsFoundPc(m.getVerifiedEmailsFound().divide(m.getProspectsContacted(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                }
+                if (!m.getNewTamAccountsIngested().equals(BigDecimal.ZERO) && m.getNewTamAccountsIngested().compareTo(m.getNewTamAccountsSegmented()) > 0) {
+                    m.setNewTamAccountsSegmentedPc(m.getNewTamAccountsSegmented().divide(m.getNewTamAccountsIngested(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                }
+
+                //fetching all campaigns of a customer
+            m = fetchCampaignMetrics(m, campaigns.stream().filter(c0->c0.getCustomer().equals(c.getName())).toList(), dateStart);
+
+            if (metricsRepository.findByCustomerIdAndDate(c.getId(),dateStart)!=null) {
+                Metrics md = metricsRepository.findByCustomerIdAndDate(c.getId(),dateStart);
+                metricsRepository.delete(md);
+            }
+                metricsRepository.save(m);
+            System.out.println("Saved: "+m.getCustomer());
+        });
+    }
+
+    private Metrics fetchCampaignMetrics(Metrics m, List<Campaign> campaigns, LocalDate date) {
+        campaigns.forEach(cam -> {
+            System.out.println("Campaign Id: "+cam.getCampaignId());
+
+            try {
+                ResponseEntity<JsonNode> responseEntity = restTemplate.exchange(
+                        getCampaignUrlByDate(cam.getCampaignId(), String.valueOf(date)),
+                        HttpMethod.GET,
+                        new HttpEntity<>(JsonNodeFactory.instance.nullNode()),
+                        JsonNode.class
+                );
+
+                if (responseEntity.getBody() != null) {
+                    JsonNode data = responseEntity.getBody();
+                    if (data.get("sent_count") != null) {
+                        m.setProspectsDelivered(m.getProspectsDelivered().add(BigDecimal.valueOf(data.get("sent_count").asInt())));
+                    }
+                    if (data.get("open_count") != null) {
+                        m.setEmailsOpened(m.getEmailsOpened().add(BigDecimal.valueOf(data.get("open_count").asInt())));
+                    }
+                    if (data.get("reply_count") != null) {
+                        m.setEmailsReplied(m.getEmailsReplied().add(BigDecimal.valueOf(data.get("reply_count").asInt())));
+                    }
+                    if (data.get("bounce_count") != null) {
+                        m.setEmailsBounced(m.getEmailsBounced().add(BigDecimal.valueOf(data.get("bounce_count").asInt())));
+                    }
+                    if (!m.getProspectsDelivered().equals(BigDecimal.ZERO) && m.getProspectsDelivered().compareTo(m.getEmailsReplied()) > 0) {
+                        m.setReplyRate(m.getEmailsReplied().divide(m.getProspectsDelivered(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                    }
+                    if (!m.getProspectsDelivered().equals(BigDecimal.ZERO) && m.getProspectsDelivered().compareTo(m.getEmailsBounced()) > 0) {
+                        m.setBounceRate(m.getEmailsBounced().divide(m.getProspectsDelivered(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                    }
+                    if (!m.getEmailsOpened().equals(BigDecimal.ZERO) && m.getEmailsOpened().compareTo(m.getEmailsReplied()) > 0) {
+                        m.setOpenToReplyRate(m.getEmailsReplied().divide(m.getEmailsOpened(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                    }
+                    if (!m.getProspectsDelivered().equals(BigDecimal.ZERO) && m.getProspectsDelivered().compareTo(m.getEmailsOpened()) > 0) {
+                        m.setOpenRate(m.getEmailsOpened().divide(m.getProspectsDelivered(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                    }
+                }
+
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
+        });
+        return m;
+    }
+
+    public void storeMetricsAMonthOnce() {
+
+
+        //Fetching all campaigns once
+        System.out.println("Fetching All Campaigns");
+        List<Campaign> campaigns = new ArrayList<>();
+        try {
+            ResponseEntity<JsonNode> responseEntity = restTemplate.exchange(
+                    smartleadGetAllCampaigns,
+                    HttpMethod.GET,
+                    new HttpEntity<>(JsonNodeFactory.instance.nullNode()),
+                    JsonNode.class
+            );
+            if (responseEntity.getBody() != null) {
+                if (responseEntity.getBody() != null && responseEntity.getBody().isArray()) {
+                    for (JsonNode campaign : responseEntity.getBody()) {
+                        if (campaign.get("name") != null) {
+                            String campName = campaign.get("name").asText();
+                            if (campName.split("-").length > 0) {
+                                String customerName = campName.split("-")[0];
+                                if (customersRepository.findCustomersByNameAndTracked(customerName, true) != null) {
+                                    if (campaign.get("id") != null && !campaign.get("id").asText().isEmpty()) {
+                                        campaigns.add(Campaign.builder().campaignId(campaign.get("id").asText())
+                                                .customer(customerName).build());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+        List<Customers> customersList = customersRepository.findAllByTracked(true);
+        customersList.forEach(c -> {
+            System.out.println("Customer: " + c.getName());
+
+            for (int i = 0; i < 30; i++ ) {
+
+                Instant instant = Instant.now();
+                LocalDate dateStart = instant.atZone(ZoneId.of("America/New_York")).toLocalDate().minusDays(i).atStartOfDay().toLocalDate();
+                LocalDate dateEnd = dateStart.plusDays(1);
+
+                System.out.println("Date: " + dateStart);
+
+                Metrics m = new Metrics();
+
+                m.setCustomer(c.getName());
+                m.setCustomerId(c.getId());
+                m.setDate(dateStart);
+                m.setNewAccountsWithSignals(companySignalsRepository.findNewAccountsWithSignals(c.getId(), dateStart, dateEnd));
+                m.setNewTamAccountsIngested(companySignalsRepository.findNewTamAccountsIngested(c.getId(), dateStart, dateEnd));
+                m.setNewTamAccountsSegmented(companySignalsRepository.findNewTamAccountsSegmented(c.getId(), dateStart, dateEnd));
+                m.setAccountsContacted(companySignalsRepository.findAccountsContacted(c.getId(), dateStart, dateEnd));
+                m.setProspectsFound(companySignalsRepository.findProspectsFound(c.getId(), dateStart, dateEnd));
+                m.setProspectsContacted(companySignalsRepository.findProspectsContacted(c.getId(), dateStart, dateEnd));
+                m.setVerifiedEmailsFound(companySignalsRepository.findVerifiedEmailsFound(c.getId(), dateStart, dateEnd));
+                if (!m.getProspectsContacted().equals(BigDecimal.ZERO) && m.getProspectsContacted().compareTo(m.getVerifiedEmailsFound()) > 0) {
+                    m.setVerifiedEmailsFoundPc(m.getVerifiedEmailsFound().divide(m.getProspectsContacted(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                }
+                if (!m.getNewTamAccountsIngested().equals(BigDecimal.ZERO) && m.getNewTamAccountsIngested().compareTo(m.getNewTamAccountsSegmented()) > 0) {
+                    m.setNewTamAccountsSegmentedPc(m.getNewTamAccountsSegmented().divide(m.getNewTamAccountsIngested(), 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)));
+                }
+
+                //fetching all campaigns of a customer
+                m = fetchCampaignMetrics(m, campaigns.stream().filter(c0 -> c0.getCustomer().equals(c.getName())).toList(), dateStart);
+
+                if (metricsRepository.findByCustomerIdAndDate(c.getId(), dateStart) != null) {
+                    Metrics md = metricsRepository.findByCustomerIdAndDate(c.getId(), dateStart);
+                    metricsRepository.delete(md);
+                }
+                metricsRepository.save(m);
+                System.out.println("Saved: " + m.getCustomer());
+                if (c.getName().equals("Kustomer")) {
+                    try {
+                        Thread.sleep(30000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+    }
+
+
+    public List<Metrics> getMetrics() {
+        return metricsRepository.findAllSorted();
     }
 }

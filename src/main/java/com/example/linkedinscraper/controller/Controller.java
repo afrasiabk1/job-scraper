@@ -2,17 +2,19 @@ package com.example.linkedinscraper.controller;
 
 import com.example.linkedinscraper.payloads.JobDataSetResponse;
 import com.example.linkedinscraper.payloads.JobQueryRequest;
+import com.example.linkedinscraper.payloads.Metrics;
 import com.example.linkedinscraper.services.ScraperService;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.data.domain.Sort;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
 
+
 @RestController
+@CrossOrigin
 public class Controller {
 
     private final ScraperService scraperService;
@@ -36,5 +38,10 @@ public class Controller {
     @PostMapping("/query/async/companies")
     public String uploadFiles(@RequestParam("file") MultipartFile file) throws IOException {
         return scraperService.importCompanies(file);
+    }
+
+    @GetMapping("/metrics")
+    public List<Metrics> getMetrics() {
+        return scraperService.getMetrics();
     }
 }
